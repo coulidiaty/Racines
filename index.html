@@ -488,6 +488,39 @@
   .day-detail-row{display:flex; align-items:center; gap:8px; font-size:13.5px; padding:4px 0;}
   .day-detail-row .glyph-sm{font-size:13px;}
   .day-note-text{font-size:13px; background:var(--paper-raised); border:1px solid var(--line); border-radius:10px; padding:10px 12px; white-space:pre-wrap;}
+
+  /* --- Accueil : résumé du jour --- */
+  .summary-strip{display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 18px;}
+  .summary-pill{
+    background:var(--sage-soft); color:var(--sage); font-family:'JetBrains Mono',monospace;
+    font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:14px;
+  }
+
+  /* --- Accueil : origine d'une tâche programmée --- */
+  .origin-pill{
+    display:inline-block; font-size:10px; background:var(--sky-soft); color:var(--sky);
+    padding:2px 7px; border-radius:8px; margin-left:6px; font-weight:600; vertical-align:middle;
+  }
+
+  /* --- Accueil : widget objectifs en cours --- */
+  .goal-mini{cursor:pointer;}
+  .goal-mini-next{font-size:12px; color:var(--ink-soft); margin-top:6px; font-style:italic;}
+
+  /* --- Accueil : journal repliable --- */
+  .journal-preview{font-size:13.5px; color:var(--ink); white-space:pre-wrap; line-height:1.4;}
+  #daily-note-input{border:none !important; background:transparent !important; padding:0 !important; width:100%;}
+  #daily-note-input:focus{outline:none;}
+
+  /* --- Habitudes : fiche stats --- */
+  .stats-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .edit-pencil-btn{background:none; border:none; color:var(--ink-soft); font-size:16px; cursor:pointer; padding:4px; flex-shrink:0;}
+
+  /* --- Tâches : programmation --- */
+  .schedule-btn{
+    background:none; border:none; color:var(--sky); font-size:11.5px; cursor:pointer; padding:0;
+    font-family:'Inter',sans-serif; font-weight:600; white-space:nowrap;
+  }
+  .item-schedule-btn{background:none; border:none; color:var(--ink-soft); font-size:14px; cursor:pointer; padding:4px; flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -517,8 +550,10 @@
 
   <main>
 
-    <!-- AUJOURD'HUI -->
+    <!-- ACCUEIL -->
     <section class="view active" id="view-today">
+      <div class="summary-strip" id="today-summary"></div>
+
       <h2 class="section-title">Habitudes du jour</h2>
       <div id="today-habits-list"></div>
 
@@ -529,8 +564,14 @@
       </div>
       <div class="card" id="today-tasks-card" style="padding:6px 12px;"></div>
 
+      <h2 class="section-title">Objectifs en cours</h2>
+      <div id="today-goals-widget"></div>
+
       <h2 class="section-title">Journal du jour</h2>
-      <textarea id="daily-note-input" class="card" style="width:100%; border:1px solid var(--line); min-height:70px; font-family:'Inter',sans-serif; font-size:13.5px; resize:vertical; padding:12px 14px;" placeholder="Un mot sur ta journée…" onchange="saveDailyNote(this.value)"></textarea>
+      <div class="card" id="today-journal-card" style="padding:12px 14px;">
+        <div id="today-journal-collapsed" onclick="expandJournal()"></div>
+        <textarea id="daily-note-input" style="min-height:70px; font-family:'Inter',sans-serif; font-size:13.5px; resize:vertical; display:none;" placeholder="Un mot sur ta journée…" onchange="saveDailyNote(this.value)" onblur="maybeCollapseJournal()"></textarea>
+      </div>
     </section>
 
     <!-- HABITUDES -->
@@ -604,7 +645,7 @@
   <nav class="tabbar">
     <button class="tab-btn active" data-view="today" onclick="switchView('today')">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
-      <span>Aujourd'hui</span>
+      <span>Accueil</span>
     </button>
     <button class="tab-btn" data-view="habits" onclick="switchView('habits')">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12M12 12C12 8 9 5 5 4C4.5 8 6.5 11 12 12ZM12 12C12 7.5 15 5 19 4C19.5 8 17.5 11.5 12 12Z"/></svg>
@@ -616,7 +657,7 @@
     </button>
     <button class="tab-btn" data-view="lists" onclick="switchView('lists')">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v10l-3 6H7l-3-6V4z"/><path d="M4 14h5l1.5 2h3L15 14h5"/></svg>
-      <span>Listes</span>
+      <span>Tâches</span>
     </button>
     <button class="tab-btn" data-view="stats" onclick="switchView('stats')">
       <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-6"/></svg>
@@ -762,6 +803,52 @@
     </div>
   </div>
 
+  <!-- Overlay: fiche stats habitude -->
+  <div class="overlay" id="habit-stats-overlay">
+    <div class="sheet">
+      <div id="habit-stats-content"></div>
+      <div class="sheet-actions" style="margin-top:10px;">
+        <button class="cancel" onclick="closeOverlay('habit-stats-overlay')" style="flex:none; width:100%;">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay: programmer une liste -->
+  <div class="overlay" id="list-schedule-overlay">
+    <div class="sheet">
+      <h3>Programmer « <span id="schedule-list-name"></span> »</h3>
+      <p class="hint">Fait apparaître automatiquement les éléments non cochés de cette liste dans les tâches du jour, sur l'Accueil.</p>
+      <div class="field-label">Type</div>
+      <div class="freq-grid" id="schedule-type-grid"></div>
+      <div id="schedule-recurring-wrap" style="display:none;">
+        <div class="field-label">Jours</div>
+        <div class="freq-grid" id="schedule-days-grid"></div>
+      </div>
+      <div id="schedule-date-wrap" style="display:none;">
+        <div class="field-label">Date</div>
+        <input type="date" id="schedule-date-input">
+      </div>
+      <div class="sheet-actions" style="margin-top:16px;">
+        <button class="cancel" onclick="closeOverlay('list-schedule-overlay')">Annuler</button>
+        <button class="confirm" style="background:var(--sky);" onclick="confirmListSchedule()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overlay: programmer un élément individuel -->
+  <div class="overlay" id="item-schedule-overlay">
+    <div class="sheet">
+      <h3>Programmer cet élément</h3>
+      <p class="hint">Apparaît dans les tâches du jour à partir de cette date, et y reste tant qu'il n'est pas coché.</p>
+      <div class="field-label">Date</div>
+      <input type="date" id="item-schedule-date-input">
+      <div class="sheet-actions" style="margin-top:16px;">
+        <button class="cancel" onclick="clearItemSchedule()">Retirer la date</button>
+        <button class="confirm" style="background:var(--sky);" onclick="confirmItemSchedule()">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Overlay: import confirm -->
   <div class="overlay" id="import-confirm-overlay">
     <div class="sheet">
@@ -818,7 +905,7 @@ const DEFAULT_STATE = {
   habits: [],
   goals: [],
   tasksToday: [],
-  lists: [{ id:'default', name:"Idées en vrac", items:[] }],
+  lists: [{ id:'default', name:"Idées en vrac", items:[], schedule:{type:'none', days:[], date:null} }],
   dailyNotes: {},
   security: { pinEnabled:false, pinHash:null }
 };
@@ -840,8 +927,13 @@ function loadState(){
       }];
     }
     if(!merged.lists || merged.lists.length===0){
-      merged.lists = [{ id:'default', name:"Idées en vrac", items:[] }];
+      merged.lists = [{ id:'default', name:"Idées en vrac", items:[], schedule:{type:'none', days:[], date:null} }];
     }
+    // s'assurer que chaque liste a un objet schedule et que chaque élément a un champ scheduledDate
+    merged.lists.forEach(l => {
+      if(!l.schedule) l.schedule = {type:'none', days:[], date:null};
+      (l.items||[]).forEach(it => { if(it.scheduledDate===undefined) it.scheduledDate = null; });
+    });
     // s'assurer que chaque habitude a un archiveLog et des tags
     merged.habits.forEach(h => {
       if(!h.archiveLog){
@@ -1084,8 +1176,129 @@ function completionRateForPeriod(habit, days){
   return habit.history.filter(h => new Date(h.date) >= since && h.done).length;
 }
 
-/* ---------- Render: Today ---------- */
+/* ---------- Tâches programmées (listes / éléments) ---------- */
+function getSurfacedTodayItems(){
+  const t = todayStr();
+  const dow = todayKey();
+  const results = [];
+  const seen = new Set();
+  state.lists.forEach(list => {
+    const sched = list.schedule || {type:'none', days:[], date:null};
+    const listDue = (sched.type==='recurring' && sched.days.includes(dow)) || (sched.type==='date' && sched.date===t);
+    (list.items||[]).forEach(item => {
+      if(item.done) return;
+      let due = false;
+      if(listDue) due = true;
+      // une tâche ponctuelle programmée non cochée se reprogramme automatiquement au lendemain
+      if(item.scheduledDate && item.scheduledDate <= t) due = true;
+      if(due && !seen.has(item.id)){
+        seen.add(item.id);
+        results.push({ listId:list.id, listName:list.name, item });
+      }
+    });
+  });
+  return results;
+}
+function scheduledItemsForDate(dstr){
+  const dow = DAY_KEYS[new Date(dstr).getDay()];
+  const results = [];
+  const seen = new Set();
+  state.lists.forEach(list => {
+    const sched = list.schedule || {type:'none', days:[], date:null};
+    const listDue = (sched.type==='recurring' && sched.days.includes(dow)) || (sched.type==='date' && sched.date===dstr);
+    (list.items||[]).forEach(item => {
+      let due = false;
+      if(listDue) due = true;
+      if(item.scheduledDate === dstr) due = true;
+      if(due && !seen.has(item.id)){
+        seen.add(item.id);
+        results.push({ listName:list.name, text:item.text, done:item.done });
+      }
+    });
+  });
+  return results;
+}
+
+/* ---------- Render: Accueil ---------- */
+function renderTodaySummary(){
+  const due = state.habits.filter(h => h.status==='active' && isDueToday(h));
+  const doneHabits = due.filter(isDoneToday).length;
+  const adhoc = state.tasksToday.filter(t=>t.date===todayStr());
+  const surfaced = getSurfacedTodayItems();
+  const tasksRemaining = adhoc.filter(t=>!t.done).length + surfaced.filter(s=>!s.item.done).length;
+  const parts = [];
+  if(due.length>0) parts.push(`${doneHabits}/${due.length} habitude${due.length>1?'s':''}`);
+  parts.push(`${tasksRemaining} tâche${tasksRemaining>1?'s':''} restante${tasksRemaining>1?'s':''}`);
+  document.getElementById('today-summary').innerHTML = parts.map(p=>`<span class="summary-pill">${p}</span>`).join('');
+}
+function nextMilestoneLabel(g){
+  const next = (g.milestones||[]).find(m=>m.status!=='done');
+  return next ? next.title : null;
+}
+function renderTodayGoalsWidget(){
+  const wrap = document.getElementById('today-goals-widget');
+  const active = state.goals.filter(g=>g.status!=='done');
+  if(active.length===0){
+    wrap.innerHTML = `<div class="empty"><span class="glyph">🎯</span>Aucun objectif en cours.<br><span style="text-decoration:underline; cursor:pointer;" onclick="switchView('goals'); openGoalForm();">Créer un objectif</span></div>`;
+    return;
+  }
+  const sorted = [...active].sort((a,b) => {
+    if(a.targetDate && b.targetDate) return a.targetDate.localeCompare(b.targetDate);
+    if(a.targetDate) return -1;
+    if(b.targetDate) return 1;
+    return (a.createdAt||'').localeCompare(b.createdAt||'');
+  });
+  const top3 = sorted.slice(0,3);
+  wrap.innerHTML = top3.map(g => {
+    const total = g.milestones.length;
+    const done = g.milestones.filter(m=>m.status==='done').length;
+    const pct = total ? Math.round(done/total*100) : 0;
+    const next = nextMilestoneLabel(g);
+    return `
+      <div class="card goal-mini" onclick="openGoalFromHome('${g.id}')">
+        <div class="goalbar-label"><span>${escapeHtml(g.title)}</span><span>${done}/${total}</span></div>
+        <div class="goal-progress-track"><div class="goal-progress-fill" style="width:${pct}%"></div></div>
+        <div class="goal-mini-next">${next ? '→ '+escapeHtml(next) : 'Pas de jalon en attente'}</div>
+      </div>`;
+  }).join('') + (active.length>3 ? `<div class="toggle-archived" style="margin-top:2px;" onclick="switchView('goals')">Voir tous mes objectifs</div>` : '');
+}
+function openGoalFromHome(id){
+  switchView('goals');
+  setTimeout(()=>{
+    document.querySelectorAll('.milestones').forEach(el=>el.classList.remove('open'));
+    const el = document.getElementById('milestones-'+id);
+    if(el){ el.classList.add('open'); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+  }, 60);
+}
+let journalExpanded = false;
+function expandJournal(){
+  journalExpanded = true;
+  renderTodayJournal();
+  setTimeout(()=>{ const ta = document.getElementById('daily-note-input'); if(ta) ta.focus(); }, 30);
+}
+function maybeCollapseJournal(){
+  journalExpanded = false;
+  renderTodayJournal();
+}
+function renderTodayJournal(){
+  const note = state.dailyNotes[todayStr()] || '';
+  const collapsedEl = document.getElementById('today-journal-collapsed');
+  const textarea = document.getElementById('daily-note-input');
+  if(journalExpanded){
+    collapsedEl.style.display = 'none';
+    textarea.style.display = 'block';
+    if(document.activeElement !== textarea) textarea.value = note;
+  } else {
+    textarea.style.display = 'none';
+    collapsedEl.style.display = 'block';
+    collapsedEl.innerHTML = note
+      ? `<div class="journal-preview">${escapeHtml(note)}</div>`
+      : `<div class="empty" style="padding:6px 0; cursor:pointer;"><span class="glyph">📔</span>Ajouter un mot sur ta journée…</div>`;
+  }
+}
 function renderToday(){
+  renderTodaySummary();
+
   const wrap = document.getElementById('today-habits-list');
   const due = state.habits.filter(h => h.status==='active' && isDueToday(h));
   if(due.length===0){
@@ -1108,21 +1321,26 @@ function renderToday(){
 
   const tasksWrap = document.getElementById('today-tasks-card');
   const tasks = state.tasksToday.filter(t=>t.date===todayStr());
-  if(tasks.length===0){
+  const surfaced = getSurfacedTodayItems();
+  if(tasks.length===0 && surfaced.length===0){
     tasksWrap.innerHTML = `<div class="empty"><span class="glyph">📋</span>Rien pour l'instant.</div>`;
   } else {
-    tasksWrap.innerHTML = tasks.map(t => `
+    const adhocHtml = tasks.map(t => `
       <div class="task-row ${t.done?'done':''}">
         <button class="task-check ${t.done?'checked':''}" onclick="toggleTask('${t.id}')">${CHECK_SVG}</button>
         <div class="task-text">${escapeHtml(t.text)}</div>
         <button class="task-del" onclick="deleteTask('${t.id}')">✕</button>
       </div>`).join('');
+    const surfacedHtml = surfaced.map(s => `
+      <div class="task-row ${s.item.done?'done':''}">
+        <button class="task-check ${s.item.done?'checked':''}" onclick="toggleListItem('${s.listId}','${s.item.id}')">${CHECK_SVG}</button>
+        <div class="task-text">${escapeHtml(s.item.text)}<span class="origin-pill">${escapeHtml(s.listName)}</span></div>
+      </div>`).join('');
+    tasksWrap.innerHTML = adhocHtml + surfacedHtml;
   }
 
-  const noteInput = document.getElementById('daily-note-input');
-  if(document.activeElement !== noteInput){
-    noteInput.value = state.dailyNotes[todayStr()] || '';
-  }
+  renderTodayGoalsWidget();
+  renderTodayJournal();
 }
 function addTask(){
   const input = document.getElementById('new-task-input');
@@ -1176,7 +1394,7 @@ function renderHabitsView(){
     activeWrap.innerHTML = `<div class="empty"><span class="glyph">🌿</span>Pas encore d'habitude active.</div>`;
   } else {
     activeWrap.innerHTML = active.map(h => `
-      <div class="habit-row clickable" onclick="openHabitEditSheet('${h.id}')">
+      <div class="habit-row clickable" onclick="openHabitStatsSheet('${h.id}')">
         <div class="habit-icon">${SPROUT_SVG}</div>
         <div class="habit-main">
           <div class="habit-name">${escapeHtml(h.name)}</div>
@@ -1205,6 +1423,51 @@ function renderHabitsView(){
       </div>`;
     }).join('');
   }
+}
+
+/* ---------- Fiche stats habitude ---------- */
+let statsHabitId = null;
+let habitStatsPeriod = '30';
+function openHabitStatsSheet(id){
+  statsHabitId = id;
+  habitStatsPeriod = '30';
+  renderHabitStatsContent();
+  document.getElementById('habit-stats-overlay').classList.add('open');
+}
+function setHabitStatsPeriod(key){ habitStatsPeriod = key; renderHabitStatsContent(); }
+function openHabitEditFromStats(){
+  if(!statsHabitId) return;
+  const id = statsHabitId;
+  closeOverlay('habit-stats-overlay');
+  openHabitEditSheet(id);
+}
+function renderHabitStatsContent(){
+  const h = state.habits.find(x=>x.id===statsHabitId);
+  if(!h){ closeOverlay('habit-stats-overlay'); return; }
+  const { currentStreak, recordStreak } = computeStreaks(h);
+  const days = periodToDays(habitStatsPeriod, h);
+  const rate = completionRateForPeriod(h, days);
+  const periodLabel = habitStatsPeriod==='all' ? `${days}j` : `${habitStatsPeriod}j`;
+  document.getElementById('habit-stats-content').innerHTML = `
+    <div class="stats-head">
+      <div>
+        <h3 style="margin-bottom:2px;">${escapeHtml(h.name)}</h3>
+        ${h.why ? `<div class="why-text">${escapeHtml(h.why)}</div>` : ''}
+        <div>${tagPills(h.tags)}</div>
+      </div>
+      <button class="edit-pencil-btn" title="Modifier" onclick="openHabitEditFromStats()">✏️</button>
+    </div>
+    <div class="detail-stats-row" style="margin-top:14px;">
+      <div class="stat-box"><div class="stat-num">🔥 ${currentStreak}</div><div class="stat-lbl">série actuelle</div></div>
+      <div class="stat-box"><div class="stat-num">${recordStreak}</div><div class="stat-lbl">meilleure série</div></div>
+    </div>
+    <h2 class="section-title" style="margin-top:18px;">Constance</h2>
+    <div class="period-row">
+      ${PERIOD_OPTIONS.map(o => `<div class="freq-chip ${habitStatsPeriod===o.key?'selected':''}" onclick="setHabitStatsPeriod('${o.key}')">${o.label}</div>`).join('')}
+    </div>
+    <div class="habit-meta" style="margin-bottom:8px;">${rate}/${periodLabel} jours faits</div>
+    ${renderHeatmap(h, days)}
+  `;
 }
 
 let selectedFreqDays = [];
@@ -1597,10 +1860,16 @@ function renderListsView(){
   renderListChips();
   renderListItems();
 }
+function scheduleLabel(sched){
+  if(!sched || sched.type==='none') return '📅 Programmer';
+  if(sched.type==='recurring') return sched.days.length ? '📅 '+sched.days.map(d=>d[0].toUpperCase()+d.slice(1)).join('·') : '📅 Programmer';
+  if(sched.type==='date') return '📅 '+fmtDateFr(sched.date);
+  return '📅 Programmer';
+}
 function renderListChips(){
   const wrap = document.getElementById('list-chips');
   wrap.innerHTML = state.lists.map(l =>
-    `<div class="list-chip ${l.id===currentListId?'selected':''}" onclick="selectList('${l.id}')">${escapeHtml(l.name)}</div>`
+    `<div class="list-chip ${l.id===currentListId?'selected':''}" onclick="selectList('${l.id}')">${l.schedule && l.schedule.type!=='none' ? '📅 ' : ''}${escapeHtml(l.name)}</div>`
   ).join('') + `<div class="list-chip add-chip" onclick="openNewListSheet()">+ Liste</div>`;
 }
 function selectList(id){
@@ -1611,9 +1880,10 @@ function renderListItems(){
   const list = state.lists.find(l=>l.id===currentListId) || state.lists[0];
   const wrap = document.getElementById('list-items-wrap');
   if(!list){ wrap.innerHTML=''; return; }
+  const scheduleBtn = `<button class="schedule-btn" onclick="openListScheduleSheet('${list.id}')">${scheduleLabel(list.schedule)}</button>`;
   const header = list.id !== 'default'
-    ? `<div class="list-header"><span>${escapeHtml(list.name)}</span><button class="del-list-btn" onclick="deleteList('${list.id}')">Supprimer la liste</button></div>`
-    : '';
+    ? `<div class="list-header"><span>${escapeHtml(list.name)}</span><div style="display:flex; gap:14px; align-items:center;">${scheduleBtn}<button class="del-list-btn" onclick="deleteList('${list.id}')">Supprimer</button></div></div>`
+    : `<div class="list-header"><span>${escapeHtml(list.name)}</span>${scheduleBtn}</div>`;
   if(list.items.length===0){
     wrap.innerHTML = header + `<div class="empty"><span class="glyph">📝</span>Liste vide.</div>`;
     return;
@@ -1621,7 +1891,8 @@ function renderListItems(){
   wrap.innerHTML = header + `<div class="card" style="padding:6px 12px;">` + list.items.map((item, idx) => `
     <div class="task-row ${item.done?'done':''}">
       <button class="task-check ${item.done?'checked':''}" onclick="toggleListItem('${list.id}','${item.id}')">${CHECK_SVG}</button>
-      <div class="task-text">${escapeHtml(item.text)}</div>
+      <div class="task-text">${escapeHtml(item.text)}${item.scheduledDate ? `<span class="origin-pill">📅 ${fmtDateFr(item.scheduledDate)}</span>` : ''}</div>
+      <button class="item-schedule-btn" title="Programmer" onclick="openItemScheduleSheet('${list.id}','${item.id}')">📅</button>
       <div class="reorder-btns">
         <button class="reorder-btn" ${idx===0?'disabled':''} onclick="moveListItem('${list.id}','${item.id}',-1)">▲</button>
         <button class="reorder-btn" ${idx===list.items.length-1?'disabled':''} onclick="moveListItem('${list.id}','${item.id}',1)">▼</button>
@@ -1635,22 +1906,22 @@ function addListItem(){
   if(!text) return;
   const list = state.lists.find(l=>l.id===currentListId);
   if(!list) return;
-  list.items.push({id:uid(), text, done:false, createdAt:todayStr()});
+  list.items.push({id:uid(), text, done:false, createdAt:todayStr(), scheduledDate:null});
   input.value='';
   saveState();
-  renderListsView();
+  renderAll();
 }
 function toggleListItem(listId, itemId){
   const list = state.lists.find(l=>l.id===listId);
   const item = list.items.find(i=>i.id===itemId);
   item.done = !item.done;
-  saveState(); renderListsView();
+  saveState(); renderAll();
 }
 function deleteListItem(listId, itemId){
   if(!confirm('Supprimer cet élément ?')) return;
   const list = state.lists.find(l=>l.id===listId);
   list.items = list.items.filter(i=>i.id!==itemId);
-  saveState(); renderListsView();
+  saveState(); renderAll();
 }
 function moveListItem(listId, itemId, dir){
   const list = state.lists.find(l=>l.id===listId);
@@ -1658,7 +1929,7 @@ function moveListItem(listId, itemId, dir){
   const newIdx = idx + dir;
   if(newIdx < 0 || newIdx >= list.items.length) return;
   [list.items[idx], list.items[newIdx]] = [list.items[newIdx], list.items[idx]];
-  saveState(); renderListsView();
+  saveState(); renderAll();
 }
 function openNewListSheet(){
   document.getElementById('new-list-name-input').value='';
@@ -1667,12 +1938,96 @@ function openNewListSheet(){
 function confirmNewList(){
   const name = document.getElementById('new-list-name-input').value.trim();
   if(!name) return;
-  const newList = {id:uid(), name, items:[]};
+  const newList = {id:uid(), name, items:[], schedule:{type:'none', days:[], date:null}};
   state.lists.push(newList);
   currentListId = newList.id;
   saveState();
   closeOverlay('new-list-overlay');
-  renderListsView();
+  renderAll();
+}
+
+/* ---------- Programmation d'une liste ---------- */
+let scheduleListId = null;
+let scheduleType = 'none';
+let scheduleDays = [];
+function openListScheduleSheet(listId){
+  scheduleListId = listId;
+  const list = state.lists.find(l=>l.id===listId);
+  const sched = list.schedule || {type:'none', days:[], date:null};
+  scheduleType = sched.type || 'none';
+  scheduleDays = sched.days ? [...sched.days] : [];
+  document.getElementById('schedule-list-name').textContent = list.name;
+  document.getElementById('schedule-date-input').value = sched.date || '';
+  renderScheduleTypeGrid();
+  renderScheduleDaysGrid();
+  updateScheduleWraps();
+  document.getElementById('list-schedule-overlay').classList.add('open');
+}
+function renderScheduleTypeGrid(){
+  const opts = [{key:'none',label:'Aucune'},{key:'recurring',label:'Récurrente'},{key:'date',label:'Date précise'}];
+  document.getElementById('schedule-type-grid').innerHTML = opts.map(o=>
+    `<div class="freq-chip ${scheduleType===o.key?'selected':''}" onclick="setScheduleType('${o.key}')">${o.label}</div>`).join('');
+}
+function setScheduleType(type){
+  scheduleType = type;
+  renderScheduleTypeGrid();
+  updateScheduleWraps();
+}
+function updateScheduleWraps(){
+  document.getElementById('schedule-recurring-wrap').style.display = scheduleType==='recurring' ? 'block' : 'none';
+  document.getElementById('schedule-date-wrap').style.display = scheduleType==='date' ? 'block' : 'none';
+}
+function renderScheduleDaysGrid(){
+  const opts = DAY_KEYS.slice(1).concat(DAY_KEYS[0]).map(d=>({key:d,label:d[0].toUpperCase()+d.slice(1)}));
+  document.getElementById('schedule-days-grid').innerHTML = opts.map(o=>
+    `<div class="freq-chip ${scheduleDays.includes(o.key)?'selected':''}" onclick="toggleScheduleDay('${o.key}')">${o.label}</div>`).join('');
+}
+function toggleScheduleDay(key){
+  if(scheduleDays.includes(key)) scheduleDays = scheduleDays.filter(k=>k!==key);
+  else scheduleDays.push(key);
+  renderScheduleDaysGrid();
+}
+function confirmListSchedule(){
+  const list = state.lists.find(l=>l.id===scheduleListId);
+  if(!list) return;
+  if(scheduleType==='recurring' && scheduleDays.length===0){ alert('Choisis au moins un jour.'); return; }
+  if(scheduleType==='date' && !document.getElementById('schedule-date-input').value){ alert('Choisis une date.'); return; }
+  list.schedule = {
+    type: scheduleType,
+    days: scheduleType==='recurring' ? scheduleDays : [],
+    date: scheduleType==='date' ? document.getElementById('schedule-date-input').value : null
+  };
+  saveState();
+  closeOverlay('list-schedule-overlay');
+  renderAll();
+}
+
+/* ---------- Programmation d'un élément individuel ---------- */
+let itemScheduleListId = null, itemScheduleItemId = null;
+function openItemScheduleSheet(listId, itemId){
+  itemScheduleListId = listId;
+  itemScheduleItemId = itemId;
+  const list = state.lists.find(l=>l.id===listId);
+  const item = list.items.find(i=>i.id===itemId);
+  document.getElementById('item-schedule-date-input').value = item.scheduledDate || '';
+  document.getElementById('item-schedule-overlay').classList.add('open');
+}
+function confirmItemSchedule(){
+  const list = state.lists.find(l=>l.id===itemScheduleListId);
+  const item = list.items.find(i=>i.id===itemScheduleItemId);
+  const val = document.getElementById('item-schedule-date-input').value;
+  item.scheduledDate = val || null;
+  saveState();
+  closeOverlay('item-schedule-overlay');
+  renderAll();
+}
+function clearItemSchedule(){
+  const list = state.lists.find(l=>l.id===itemScheduleListId);
+  const item = list.items.find(i=>i.id===itemScheduleItemId);
+  item.scheduledDate = null;
+  saveState();
+  closeOverlay('item-schedule-overlay');
+  renderAll();
 }
 function deleteList(id){
   if(id==='default'){ alert("La liste par défaut ne peut pas être supprimée."); return; }
@@ -1737,7 +2092,8 @@ function dayInfo(dstr){
   });
   const done = habitsDue.filter(h => h.history.some(e=>e.date===dstr && e.done));
   const missed = habitsDue.filter(h => !h.history.some(e=>e.date===dstr && e.done));
-  const tasks = state.tasksToday.filter(t=>t.date===dstr);
+  const tasks = state.tasksToday.filter(t=>t.date===dstr).map(t=>({text:t.text, done:t.done}))
+    .concat(scheduledItemsForDate(dstr).map(s=>({text:`${s.text} (${s.listName})`, done:s.done})));
   const goalsHit = state.goals.filter(g=>g.completedAt===dstr);
   const milestonesHit = [];
   state.goals.forEach(g => g.milestones.forEach(m => { if(m.completedAt===dstr) milestonesHit.push({goal:g, milestone:m}); }));
